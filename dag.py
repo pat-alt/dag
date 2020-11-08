@@ -3,12 +3,8 @@ import numpy as np
 from functools import reduce
 
 scm = {
-    "A": ["X"],
-    "B": ["Z"],
-    "D": ["Z"],
-    "Z": ["A","Y"],
-    # "E": ["A","D"],
-    # "X": ["E", "A"],
+    "A": ["D","Y"],
+    "D": [],
     "Y": []
 }
 
@@ -133,7 +129,11 @@ class Dag():
         descendent_paths = self.find_all_paths_to_outcome(departure)
         # Filter for paths leading into exposure:
         descendent_paths = [path for path in descendent_paths if self.is_descendant(self.exposure, path[1])]
+        if len(descendent_paths)==0:
+            raise Exception("Exposure has no descendants. No causal effect to measure.")
         descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
+        if self.outcome not in descendants:
+            raise Exception("Outcome variable is not a descendant of exposure variables. No causal effect to measure.")
         descendants = list(filter(lambda x: x not in [self.exposure, self.outcome], descendants))
         self.descendants = descendants
 
@@ -155,12 +155,4 @@ class Dag():
 
 dag = Dag(scm, outcome, exposure)
 
-dag.find_all_paths_through_parents()
-dag.find_all_descendants()
-dag.descendants
-
-dag.is_valid_adjustment_set(["X"])
-dag.final_backdoor_paths
-dag.find_all_paths_through_parents()
-dag.find_parents_of_exposure()
-dag.all_paths_through_parents
+dag.is_valid_adjustment_set("A")
