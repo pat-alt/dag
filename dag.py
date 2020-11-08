@@ -3,12 +3,12 @@ import numpy as np
 from functools import reduce
 
 scm = {
-    "A": ["C"],
-    "B": ["E", "Y"],
-    "C": ["Y"],
-    "D": ["C"],
-    "E": ["A","D"],
-    "X": ["E", "A"],
+    "A": ["X"],
+    "B": ["Z"],
+    "D": ["Z"],
+    "Z": ["A","Y"],
+    # "E": ["A","D"],
+    # "X": ["E", "A"],
     "Y": []
 }
 
@@ -72,13 +72,16 @@ class Dag():
         self.adj_matrix = build_adj_matrix(scm) # build adj matrix
         self.matrix_index = {k:i for i,k in enumerate(scm)}
 
-    def find_all_paths(self):
+    def find_parents_of_exposure(self):
         index_exp = self.matrix_index[self.exposure]
         parents_of_exp = [k for i,k in enumerate(self.scm) if self.adj_matrix[i,index_exp]==1]
-        explored = {k:True if k in parents_of_exp else False for k in self.scm.keys()}
+        return parents_of_exp
+
+    def find_all_paths_to_outcome(self, departure):
+        explored = {k:True if k in departure else False for k in self.scm.keys()}
         # Run modified breadth-first-search starting from parents:
         unconnected_tree = bfs(
-            parents_of_exp,
+            departure,
             explored,
             self.scm,
             self.outcome,
@@ -88,17 +91,76 @@ class Dag():
         )
         # Connect related edges in tree:
         tree = connect_paths(unconnected_tree[0],unconnected_tree)
-        self.all_paths_through_parents = tree
+        return tree
 
-    def valid_adjustment_sets(self):
-        pass
+    def irrelevant_parent_path(self, path):
+        if self.outcome not in path:
+            return float('inf')
+        else:
+            return 0
 
     def is_valid_adjustment_set(self, proposed_set):
-        pass
+        if self.outcome in proposed_set or self.exposure in proposed_set:
+            raise Exception("You supplied the outcome variables. What's wrong with you?")
+        # Find all descendants of exposure variable:
+        self.find_all_descendants()
+        # Find all paths through parents:
+        self.find_all_paths_through_parents()
+        # Update backdoor paths:
+        tree = self.all_paths_through_parents
+        # Paths before set was evaluated:
+        potential_backdoor_paths = list(map(lambda x: {y:(self.is_collider(path=x, vertex=y) + self.irrelevant_parent_path(x)) for y in x},tree))
+        # Evaluates with proposed set:
+        final_backdoor_paths = list(map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), vertex=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths))
+        self.final_backdoor_paths = final_backdoor_paths
+        back_door_closed = list(map(lambda x: sum(list(x.values()))>=1,final_backdoor_paths))
+        self.back_door_closed = back_door_closed
+        if any([node in self.descendants for node in proposed_set]):
+            return False
+        else:
+            return all(back_door_closed)
+
+    def find_all_paths_through_parents(self):
+        parents = self.find_parents_of_exposure()
+        if len(parents)>0:
+            tree = reduce(lambda x,y: x+y, [self.find_all_paths_to_outcome(parent) for parent in parents])
+        else:
+            tree = []
+        self.all_paths_through_parents = tree
+
+    def find_all_descendants(self):
+        departure = self.exposure
+        descendent_paths = self.find_all_paths_to_outcome(departure)
+        # Filter for paths leading into exposure:
+        descendent_paths = [path for path in descendent_paths if self.is_descendant(self.exposure, path[1])]
+        descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
+        descendants = list(filter(lambda x: x not in [self.exposure, self.outcome], descendants))
+        self.descendants = descendants
+
+    # Check if node is collider on given path:
+    def is_collider(self, path, vertex):
+        if vertex == path[0] or vertex==path[-1]:
+            return int(False)
+        else:
+            idx = path.index(vertex)
+            parent = path[idx-1]
+            child = path[idx+1]
+            col = self.matrix_index[vertex]
+            row_parent = self.matrix_index[parent]
+            row_child = self.matrix_index[child]
+            return int(self.adj_matrix[row_parent,col]==1 and self.adj_matrix[row_child,col]==1)
+
+    def is_descendant(self, parent, child):
+        return self.adj_matrix[self.matrix_index[parent], self.matrix_index[child]]==1
 
 dag = Dag(scm, outcome, exposure)
 
-dag.adj_matrix
-dag.find_all_paths()
+dag.find_all_paths_through_parents()
+dag.find_all_descendants()
+dag.descendants
 
+dag.is_valid_adjustment_set(["X"])
+dag.final_backdoor_paths
+dag.find_all_paths_through_parents()
+dag.find_parents_of_exposure()
 dag.all_paths_through_parents
