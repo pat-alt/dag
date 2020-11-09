@@ -2,20 +2,7 @@
 import numpy as np
 from functools import reduce
 
-scm = {
-    "D": ["Y", "X"],
-    "Y": ["F"],
-    "F": ['G'],
-    "X": [],
-    "G": ['D'],
-    "H": ["F"],
-    "I": ["G"]
-}
-
-outcome = "Y"
-exposure = "D"
-
-def find_outcome_descendants(scm, my_list, node):
+def find_outcome_descendants(scm, exposure, my_list, node):
     len_before = len(my_list)
     # add descendants
     for desc in scm[node]:
@@ -30,7 +17,7 @@ def find_outcome_descendants(scm, my_list, node):
         return my_list
     else:
         for nested_node in my_list:
-            my_list = find_outcome_descendants(scm, my_list, nested_node)
+            my_list = find_outcome_descendants(scm, exposure, my_list, nested_node)
     return my_list
 
 def build_adj_matrix(scm):
@@ -119,7 +106,7 @@ class Dag():
 
     def is_valid_adjustment_set(self, proposed_set):
         if self.outcome in proposed_set or self.exposure in proposed_set:
-            raise Exception("You supplied the outcome variables. What's wrong with you?")
+            raise Exception("You should not supply the outcome variable as a proposed set")
         # Find all descendants of exposure variable:
         self.find_all_descendants()
         # Find all paths through parents:
@@ -133,7 +120,6 @@ class Dag():
         self.final_backdoor_paths = final_backdoor_paths
         back_door_closed = list(map(lambda x: sum(list(x.values()))>=1,final_backdoor_paths))
         self.back_door_closed = back_door_closed
-        print(self.descendants)
         if any([node in self.descendants for node in proposed_set]):
             return False
         else:
@@ -152,7 +138,6 @@ class Dag():
         descendent_paths = self.find_all_paths_to_outcome(departure)
         # Filter for paths leading into exposure:
         descendent_paths = [path for path in descendent_paths if self.is_descendant(self.exposure, path[1])]
-        print(descendent_paths)
         if len(descendent_paths)==0:
             raise Exception("Exposure has no descendants. No causal effect to measure.")
         descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
@@ -160,7 +145,7 @@ class Dag():
             raise Exception("Outcome variable is not a descendant of exposure variables. No causal effect to measure.")
         descendants = list(filter(lambda x: x not in [self.exposure, self.outcome], descendants))
         # Add outcome descendants:
-        outcome_descendants = find_outcome_descendants(scm, [], "Y")
+        outcome_descendants = find_outcome_descendants(self.scm, self.exposure, [], self.outcome)
         descendants = descendants + [e for e in outcome_descendants if e not in descendants]
         self.descendants = descendants
 
@@ -180,6 +165,4 @@ class Dag():
     def is_descendant(self, parent, child):
         return self.adj_matrix[self.matrix_index[parent], self.matrix_index[child]]==1
 
-dag = Dag(scm, outcome, exposure)
 
-print(dag.is_valid_adjustment_set(["F"]))
