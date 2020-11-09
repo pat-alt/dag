@@ -7,7 +7,7 @@ scm = {
     "Y": ["F"],
     "F": ['G'],
     "X": [],
-    "G": [],
+    "G": ['D'],
     "H": ["F"],
     "I": ["G"]
 }
@@ -23,6 +23,9 @@ def find_outcome_descendants(scm, my_list, node):
             my_list.append(desc)
     len_after = len(my_list)
 
+    # Catch exception for the case when exposure is descendant of outcome.
+    if exposure in my_list:
+        raise Exception("Exposure is a descendant of the outcome variable. Are you sure you supplied an acyclical graph?")
     if len_after == len_before:
         return my_list
     else:
