@@ -106,7 +106,7 @@ class Dag():
 
     def is_valid_adjustment_set(self, proposed_set):
         if self.outcome in proposed_set or self.exposure in proposed_set:
-            raise Exception("You should not supply the outcome variable as a proposed set")
+            raise Exception("You should not supply the outcome or exposure variable as a proposed set")
         # Find all descendants of exposure variable:
         self.find_all_descendants()
         # Find all paths through parents:
