@@ -3,6 +3,7 @@ import numpy as np
 from functools import reduce
 import networkx as nx # only for charting
 
+# Helper function that builds adjacency matrix:
 def build_adj_matrix(scm):
     d = len(scm)
     mat = np.zeros((d,d))
@@ -12,6 +13,7 @@ def build_adj_matrix(scm):
                 mat[i,j] = 1
     return mat
 
+# Helper function that connects realted edges:
 def connect_paths(starting_edges, tree):
     final_paths = []
     for edges in starting_edges:
@@ -30,7 +32,7 @@ def connect_paths(starting_edges, tree):
         final_paths += paths
     return final_paths
 
-# A modified breadth-first-search:
+# A modified breadth-first-search from starting nodes to outcome:
 def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_index):
     L = [starting_nodes]
     L_i = L[0]
@@ -59,6 +61,7 @@ def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_ind
         L_i = L[counter]
     return tree
 
+# Helper function that prepares graph to be plotted:
 def create_edges(scm):
     L=[]
     for k, v in scm.items():
@@ -66,6 +69,7 @@ def create_edges(scm):
             L.append((k,val))
     return L
 
+## Dag class: ----
 class Dag():
     def __init__(self, scm, outcome, exposure):
         self.scm = scm # list of dictionaries
@@ -95,14 +99,16 @@ class Dag():
         tree = connect_paths(unconnected_tree[0],unconnected_tree)
         return tree
 
+    # Paths through parents that do not lead to outcome:
     def irrelevant_parent_path(self, path):
         if self.outcome not in path:
             return float('inf')
         else:
             return 0
 
+    # Main method:
     def is_valid_adjustment_set(self, proposed_set):
-        ## Simple checks: ----
+        ## 1.) Simple checks: ----
         if self.outcome in proposed_set or self.exposure in proposed_set:
             raise Exception("You should not supply the outcome or exposure variable as a proposed set")
         # Find all descendants of exposure variable:
@@ -118,7 +124,7 @@ class Dag():
         if includes_descendant:
             print("Proposed set includes descendant of exposure variable.")
             return False
-        ## Backdoor checks: ----
+        ## 2.) Backdoor checks: ----
         else:
             # Find all paths through parents:
             self.find_all_paths_through_parents()
