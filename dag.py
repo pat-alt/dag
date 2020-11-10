@@ -145,10 +145,12 @@ class Dag():
             raise Exception("You should not supply the outcome or exposure variable as a proposed set")
         # Find all descendants of exposure variable:
         descendants = self.find_descendants([], self.exposure)
+        if len(descendants)==0:
+            raise Exception("Exposure has no descendants. No causal effect to measure.")
         if self.outcome not in descendants:
             raise Exception("Outcome not caused by exposure.")
         if self.exposure in descendants:
-            raise Exception("Exposure is descendant of outcome.")
+            raise Exception("Exposure is a descendant of the outcome variable. Are you sure you supplied an acyclical graph?")
         # Check for descendants
         includes_descendant = any([node in descendants for node in proposed_set])
         if includes_descendant:
@@ -182,54 +184,18 @@ class Dag():
     def find_descendants(self, descendants, node):
         scm = self.scm
         exposure = self.exposure
-
         len_before = len(descendants)
         # add descendants
         for desc in scm[node]:
             if desc not in descendants:
                 descendants.append(desc)
-        # Raise error if exposure has no descendants:
-        if len(descendants)==0:
-            raise Exception("Exposure has no descendants. No causal effect to measure.")
-
         len_after = len(descendants)
-        # Catch exception for the case when exposure is descendant of outcome:
-        if exposure in descendants:
-            raise Exception(
-                "Exposure is a descendant of the outcome variable. Are you sure you supplied an acyclical graph?")
         if len_after == len_before:
             return descendants
         else:
             for nested_node in descendants:
                 descendants = self.find_descendants(descendants, nested_node)
-        # Raise error if Y not descendant of D:
-        if self.outcome not in descendants:
-            raise Exception("Outcome variable is not a descendant of exposure variables. No causal effect to measure.")
         return descendants
-
-    # # General function to get all descendants of a node:
-    # def find_all_descendants_of_node(self, node):
-    #     all_paths = self.find_all_paths_from(node)
-    #     descendent_paths = [reduce(lambda x,y: x+[y] if self.is_descendant(x[-1],y) else x,path,[path[0]])[1:] for path in all_paths]
-    #     return descendent_paths
-
-    # def get_all_descendants_of_exposure(self):
-    #     descendent_paths = self.find_all_descendants_of_node(self.exposure)
-    #     if len(descendent_paths)>=1:
-    #         descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
-    #         descendants = list(filter(lambda x: x!=self.exposure, descendants))
-    #     else:
-    #         descendants = []
-    #     self.desc_exposure = descendants
-    #
-    # def get_all_descendants_of_outcome(self):
-    #     descendent_paths = self.find_all_descendants_of_node(self.outcome)
-    #     if len(descendent_paths)>=1:
-    #         descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
-    #         descendants = list(filter(lambda x: x!=self.outcome, descendants))
-    #     else:
-    #         descendants = []
-    #     self.desc_outcome = descendants
 
     # Check if node is collider on given path:
     def is_collider(self, path, vertex):
