@@ -184,12 +184,12 @@ class Dag():
 
     # General function to get all descendants of a node:
     def find_all_descendants_of_node(self, node):
-        descendent_paths = self.find_all_paths_from(node)
+        all_paths = self.find_all_paths_from(node)
+        descendent_paths = [reduce(lambda x,y: x+[y] if self.is_descendant(x[-1],y) else x,path,[path[0]])[1:] for path in all_paths]
         return descendent_paths
 
     def get_all_descendants_of_exposure(self):
         descendent_paths = self.find_all_descendants_of_node(self.exposure)
-        descendent_paths = [reduce(lambda x,y: x+y if self.outcome not in x else x,path) for path in descendent_paths if self.is_descendant(self.exposure, path[1])]
         if len(descendent_paths)>=1:
             descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
             descendants = list(filter(lambda x: x!=self.exposure, descendants))
@@ -199,7 +199,6 @@ class Dag():
 
     def get_all_descendants_of_outcome(self):
         descendent_paths = self.find_all_descendants_of_node(self.outcome)
-        descendent_paths = [path for path in descendent_paths if self.is_descendant(self.outcome, path[1])]
         if len(descendent_paths)>=1:
             descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
             descendants = list(filter(lambda x: x!=self.outcome, descendants))
@@ -233,19 +232,16 @@ class Dag():
 
 
 # scm = {
-#     "X": ["A"],
+#     "X": ["Y"],
 #     "Y": [],
-#     "A": ["Y", "B"],
-#     "B": []
+#     "A": ["X","B"],
+#     "B": ["X"],
+#     "C": ["B", "Y"]
 # }
 # outcome = "Y"
 # exposure = "X"
 # # instantiate the class:
 # dag = Dag(scm, outcome, exposure)
 # dag.plot()
-#
-# dag.get_all_descendants_of_outcome()
-# dag.desc_outcome
-#
-# print(dag.is_valid_adjustment_set([]))
-# print(dag.is_valid_adjustment_set(["B"]))
+# dag.get_all_descendants_of_exposure()
+# dag.desc_exposure
