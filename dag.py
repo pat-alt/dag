@@ -31,35 +31,6 @@ def connect_paths(starting_edges, tree):
     return final_paths
 
 # A modified breadth-first-search:
-def bfs_standard(starting_node, scm, adj_matrix, matrix_index):
-    explored = {k:True if k==starting_node else False for k in scm.keys()}
-    L = [[starting_node]]
-    L_i = L[0]
-    counter = 0
-    tree = []
-    while (len(L_i)!=0 and counter <5):
-        L += [[]]
-        tree += [[]]
-        vertices_to_explore = [i for i in L[counter]] # explore only non-outcome variables
-        counter_vertex = 0
-        for vertex in vertices_to_explore:
-            # Explose all edges except the one leading to exposure:
-            current_pos = matrix_index[vertex]
-            neighbours = [k for i,k in enumerate(scm) if adj_matrix[current_pos,i]==1]
-            neighbours += [k for i,k in enumerate(scm) if adj_matrix[i,current_pos]==1]
-            for neighbour in neighbours:
-                if explored[neighbour] == False:
-                    explored[neighbour] = True
-                    L[counter+1] += neighbour
-                    tree[counter] += [[vertex,neighbour]]
-            counter_vertex += 1
-        if len(tree[counter])==0:
-            tree = tree[0:counter]
-        counter += 1
-        L_i = L[counter]
-    return tree
-
-# A modified breadth-first-search:
 def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_index):
     L = [starting_nodes]
     L_i = L[0]
@@ -107,15 +78,6 @@ class Dag():
         index_exp = self.matrix_index[self.exposure]
         parents_of_exp = [k for i,k in enumerate(self.scm) if self.adj_matrix[i,index_exp]==1]
         return parents_of_exp
-
-    def find_all_paths_from(self, departure):
-        unconnected_tree = bfs_standard(departure, self.scm, self.adj_matrix, self.matrix_index)
-        # Connect related edges in tree:
-        if len(unconnected_tree)>=1:
-            tree = connect_paths(unconnected_tree[0],unconnected_tree)
-        else:
-            tree = unconnected_tree
-        return tree
 
     def find_all_paths_to_outcome(self, departure):
         explored = {k:True if k in departure else False for k in self.scm.keys()}
