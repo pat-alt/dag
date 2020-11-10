@@ -16,7 +16,6 @@ def connect_paths(starting_edges, tree):
     final_paths = []
     for edges in starting_edges:
         L = [[edges]]
-        L_i = L[0]
         counter = 0
         while counter < (len(tree)-1):
             L += [[]]
