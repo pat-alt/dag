@@ -3,24 +3,6 @@ import numpy as np
 from functools import reduce
 import networkx as nx # only for charting
 
-def find_outcome_descendants(scm, exposure, my_list, node):
-    len_before = len(my_list)
-    # add descendants
-    for desc in scm[node]:
-        if desc not in my_list:
-            my_list.append(desc)
-    len_after = len(my_list)
-
-    # Catch exception for the case when exposure is descendant of outcome.
-    if exposure in my_list:
-        raise Exception("Exposure is a descendant of the outcome variable. Are you sure you supplied an acyclical graph?")
-    if len_after == len_before:
-        return my_list
-    else:
-        for nested_node in my_list:
-            my_list = find_outcome_descendants(scm, exposure, my_list, nested_node)
-    return my_list
-
 def build_adj_matrix(scm):
     d = len(scm)
     mat = np.zeros((d,d))
@@ -30,16 +12,53 @@ def build_adj_matrix(scm):
                 mat[i,j] = 1
     return mat
 
-def connect_paths(connected_paths, tree):
-    for path in connected_paths:
+def connect_paths(starting_edges, tree):
+    final_paths = []
+    for edges in starting_edges:
+        L = [[edges]]
+        L_i = L[0]
         counter = 0
         while counter < (len(tree)-1):
+            L += [[]]
             children = tree[counter+1]
-            for child in children:
-                if path[-1]==child[0]:
-                    path += child[1]
+            for edge in L[counter]:
+                for child in children:
+                    path_to_here = edge
+                    if path_to_here[-1]==child[0]:
+                        L[counter+1] += [path_to_here + [child[1]]]
             counter += 1
-    return connected_paths
+        paths = [i for i in L if len(i)>0][-1]
+        final_paths += paths
+    return final_paths
+
+# A modified breadth-first-search:
+def bfs_standard(starting_node, scm, adj_matrix, matrix_index):
+    explored = {k:True if k==starting_node else False for k in scm.keys()}
+    L = [[starting_node]]
+    L_i = L[0]
+    counter = 0
+    tree = []
+    while (len(L_i)!=0 and counter <5):
+        L += [[]]
+        tree += [[]]
+        vertices_to_explore = [i for i in L[counter]] # explore only non-outcome variables
+        counter_vertex = 0
+        for vertex in vertices_to_explore:
+            # Explose all edges except the one leading to exposure:
+            current_pos = matrix_index[vertex]
+            neighbours = [k for i,k in enumerate(scm) if adj_matrix[current_pos,i]==1]
+            neighbours += [k for i,k in enumerate(scm) if adj_matrix[i,current_pos]==1]
+            for neighbour in neighbours:
+                if explored[neighbour] == False:
+                    explored[neighbour] = True
+                    L[counter+1] += neighbour
+                    tree[counter] += [[vertex,neighbour]]
+            counter_vertex += 1
+        if len(tree[counter])==0:
+            tree = tree[0:counter]
+        counter += 1
+        L_i = L[counter]
+    return tree
 
 # A modified breadth-first-search:
 def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_index):
@@ -60,7 +79,7 @@ def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_ind
             for neighbour in neighbours:
                 if explored[neighbour] == False:
                     L[counter+1] += neighbour
-                    if neighbour!="Y":
+                    if neighbour!=outcome:
                         explored[neighbour] = True
                     tree[counter] += [[vertex,neighbour]]
             counter_vertex += 1
@@ -90,6 +109,15 @@ class Dag():
         parents_of_exp = [k for i,k in enumerate(self.scm) if self.adj_matrix[i,index_exp]==1]
         return parents_of_exp
 
+    def find_all_paths_from(self, departure):
+        unconnected_tree = bfs_standard(departure, self.scm, self.adj_matrix, self.matrix_index)
+        # Connect related edges in tree:
+        if len(unconnected_tree)>=1:
+            tree = connect_paths(unconnected_tree[0],unconnected_tree)
+        else:
+            tree = unconnected_tree
+        return tree
+
     def find_all_paths_to_outcome(self, departure):
         explored = {k:True if k in departure else False for k in self.scm.keys()}
         # Run modified breadth-first-search starting from parents:
@@ -113,26 +141,37 @@ class Dag():
             return 0
 
     def is_valid_adjustment_set(self, proposed_set):
+        ## Simple checks: ----
         if self.outcome in proposed_set or self.exposure in proposed_set:
             raise Exception("You should not supply the outcome or exposure variable as a proposed set")
         # Find all descendants of exposure variable:
-        self.find_all_descendants()
-        # Find all paths through parents:
-        self.find_all_paths_through_parents()
-        # Update backdoor paths:
-        tree = self.all_paths_through_parents
-        # Paths before set was evaluated:
-        potential_backdoor_paths = list(map(lambda x: {y:(self.is_collider(path=x, vertex=y) + self.irrelevant_parent_path(x)) for y in x},tree))
-        # Evaluates with proposed set:
-        final_backdoor_paths = list(
-            map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), vertex=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths)
-        )
-        self.final_backdoor_paths = final_backdoor_paths
-        back_door_closed = list(map(lambda x: sum(list(x.values()))>=1,final_backdoor_paths))
-        self.back_door_closed = back_door_closed
-        if any([node in self.descendants for node in proposed_set]):
+        self.get_all_descendants_of_exposure()
+        if self.outcome not in self.desc_exposure:
+            raise Exception("Outcome not caused by exposure.")
+        # Fina all..
+        self.get_all_descendants_of_outcome()
+        if self.exposure in self.desc_outcome:
+            raise Exception("Exposure is descendant of outcome.")
+        # Check for descendants
+        includes_descendant = any([node in self.desc_exposure for node in proposed_set])
+        if includes_descendant:
+            print("Proposed set includes descendant of exposure variable.")
             return False
+        ## Backdoor checks: ----
         else:
+            # Find all paths through parents:
+            self.find_all_paths_through_parents()
+            # Update backdoor paths:
+            tree = self.all_paths_through_parents
+            # Paths before set was evaluated:
+            potential_backdoor_paths = list(map(lambda x: {y:(self.is_collider(path=x, vertex=y) + self.irrelevant_parent_path(x)) for y in x},tree))
+            # Evaluates with proposed set:
+            final_backdoor_paths = list(
+                map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), vertex=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths)
+            )
+            self.final_backdoor_paths = final_backdoor_paths
+            back_door_closed = list(map(lambda x: sum(list(x.values()))>=1,final_backdoor_paths))
+            self.back_door_closed = back_door_closed
             return all(back_door_closed)
 
     def find_all_paths_through_parents(self):
@@ -143,21 +182,30 @@ class Dag():
             tree = []
         self.all_paths_through_parents = tree
 
-    def find_all_descendants(self):
-        departure = self.exposure
-        descendent_paths = self.find_all_paths_to_outcome(departure)
-        # Filter for paths leading into exposure:
-        descendent_paths = [path for path in descendent_paths if self.is_descendant(self.exposure, path[1])]
-        if len(descendent_paths)==0:
-            raise Exception("Exposure has no descendants. No causal effect to measure.")
-        descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
-        if self.outcome not in descendants:
-            raise Exception("Outcome variable is not a descendant of exposure variables. No causal effect to measure.")
-        descendants = list(filter(lambda x: x not in [self.exposure, self.outcome], descendants))
-        # Add outcome descendants:
-        outcome_descendants = find_outcome_descendants(self.scm, self.exposure, [], self.outcome)
-        descendants = descendants + [e for e in outcome_descendants if e not in descendants]
-        self.descendants = descendants
+    # General function to get all descendants of a node:
+    def find_all_descendants_of_node(self, node):
+        descendent_paths = self.find_all_paths_from(node)
+        return descendent_paths
+
+    def get_all_descendants_of_exposure(self):
+        descendent_paths = self.find_all_descendants_of_node(self.exposure)
+        descendent_paths = [reduce(lambda x,y: x+y if self.outcome not in x else x,path) for path in descendent_paths if self.is_descendant(self.exposure, path[1])]
+        if len(descendent_paths)>=1:
+            descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
+            descendants = list(filter(lambda x: x!=self.exposure, descendants))
+        else:
+            descendants = []
+        self.desc_exposure = descendants
+
+    def get_all_descendants_of_outcome(self):
+        descendent_paths = self.find_all_descendants_of_node(self.outcome)
+        descendent_paths = [path for path in descendent_paths if self.is_descendant(self.outcome, path[1])]
+        if len(descendent_paths)>=1:
+            descendants = list(set(reduce(lambda x,y: x+y, descendent_paths)))
+            descendants = list(filter(lambda x: x!=self.outcome, descendants))
+        else:
+            descendants = []
+        self.desc_outcome = descendants
 
     # Check if node is collider on given path:
     def is_collider(self, path, vertex):
@@ -174,7 +222,7 @@ class Dag():
 
     def is_descendant(self, parent, child):
         return self.adj_matrix[self.matrix_index[parent], self.matrix_index[child]]==1
-    
+
     # Plot graph:
     def plot(self):
         gr = nx.DiGraph()
@@ -184,3 +232,20 @@ class Dag():
         nx.draw(gr, with_labels=True)
 
 
+# scm = {
+#     "X": ["A"],
+#     "Y": [],
+#     "A": ["Y", "B"],
+#     "B": []
+# }
+# outcome = "Y"
+# exposure = "X"
+# # instantiate the class:
+# dag = Dag(scm, outcome, exposure)
+# dag.plot()
+#
+# dag.get_all_descendants_of_outcome()
+# dag.desc_outcome
+#
+# print(dag.is_valid_adjustment_set([]))
+# print(dag.is_valid_adjustment_set(["B"]))
