@@ -98,7 +98,7 @@ class Dag():
         if self.outcome in proposed_set or self.exposure in proposed_set:
             raise Exception("You should not supply the outcome or exposure variable as a proposed set")
         # Find all descendants of exposure variable:
-        self.descendants = self.find_descendants(my_list=[], node=self.exposure)
+        self.descendants = self.find_descendants(descendants=[], node=self.exposure)
         # Find all paths through parents:
         self.find_all_paths_through_parents()
         # Update backdoor paths:
@@ -125,26 +125,33 @@ class Dag():
             tree = []
         self.all_paths_through_parents = tree
 
-    def find_descendants(self, my_list, node):
+    def find_descendants(self, descendants, node):
         scm = self.scm
         exposure = self.exposure
 
-        len_before = len(my_list)
+        len_before = len(descendants)
         # add descendants
         for desc in scm[node]:
-            if desc not in my_list:
-                my_list.append(desc)
-        len_after = len(my_list)
-        # Catch exception for the case when exposure is descendant of outcome.
-        if exposure in my_list:
+            if desc not in descendants:
+                descendants.append(desc)
+        # Raise error if exposure has no descendants:
+        if len(descendants)==0:
+            raise Exception("Exposure has no descendants. No causal effect to measure.")
+
+        len_after = len(descendants)
+        # Catch exception for the case when exposure is descendant of outcome:
+        if exposure in descendants:
             raise Exception(
                 "Exposure is a descendant of the outcome variable. Are you sure you supplied an acyclical graph?")
         if len_after == len_before:
-            return my_list
+            return descendants
         else:
-            for nested_node in my_list:
-                my_list = self.find_descendants(my_list, nested_node)
-        return my_list
+            for nested_node in descendants:
+                descendants = self.find_descendants(descendants, nested_node)
+        # Raise error if Y not descendant of D:
+        if self.outcome not in descendants:
+            raise Exception("Outcome variable is not a descendant of exposure variables. No causal effect to measure.")
+        return descendants
 
     # Check if node is collider on given path:
     def is_collider(self, path, vertex):
@@ -169,19 +176,3 @@ class Dag():
         edges = create_edges(self.scm)
         gr.add_edges_from(edges)
         nx.draw(gr, with_labels=True)
-
-
-# scm = {
-#     "Y": [],
-#     "X": ["A"],
-#     "A": ["Y", "B"],
-#     "B": []
-# }
-# outcome = "Y"
-# exposure = "X"
-# # instantiate the class:
-# dag = Dag(scm, outcome, exposure)
-#
-# # Propose a VAS:
-# proposed_set = ["X"]
-# print(dag.is_valid_adjustment_set(proposed_set))
