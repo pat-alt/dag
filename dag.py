@@ -1,6 +1,7 @@
 ## DAG module
 import numpy as np
 from functools import reduce
+import networkx as nx # only for charting
 
 def find_outcome_descendants(scm, exposure, my_list, node):
     len_before = len(my_list)
@@ -69,6 +70,13 @@ def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_ind
         L_i = L[counter]
     return tree
 
+def create_edges(scm):
+    L=[]
+    for k, v in scm.items():
+        for val in v:
+            L.append((k,val))
+    return L
+
 class Dag():
     def __init__(self, scm, outcome, exposure):
         self.scm = scm # list of dictionaries
@@ -116,7 +124,9 @@ class Dag():
         # Paths before set was evaluated:
         potential_backdoor_paths = list(map(lambda x: {y:(self.is_collider(path=x, vertex=y) + self.irrelevant_parent_path(x)) for y in x},tree))
         # Evaluates with proposed set:
-        final_backdoor_paths = list(map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), vertex=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths))
+        final_backdoor_paths = list(
+            map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), vertex=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths)
+        )
         self.final_backdoor_paths = final_backdoor_paths
         back_door_closed = list(map(lambda x: sum(list(x.values()))>=1,final_backdoor_paths))
         self.back_door_closed = back_door_closed
@@ -164,5 +174,13 @@ class Dag():
 
     def is_descendant(self, parent, child):
         return self.adj_matrix[self.matrix_index[parent], self.matrix_index[child]]==1
+    
+    # Plot graph:
+    def plot(self):
+        gr = nx.DiGraph()
+        gr.add_nodes_from(self.scm)
+        edges = create_edges(self.scm)
+        gr.add_edges_from(edges)
+        nx.draw(gr, with_labels=True)
 
 
