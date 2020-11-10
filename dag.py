@@ -41,11 +41,11 @@ def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_ind
     while (len(L_i)!=0 and set(L_i)!={outcome}):
         L += [[]]
         tree += [[]]
-        vertices_to_explore = [i for i in L[counter] if i!=outcome] # explore only non-outcome variables
-        counter_vertex = 0
-        for vertex in vertices_to_explore:
+        nodes_to_explore = [i for i in L[counter] if i!=outcome] # explore only non-outcome variables
+        counter_node = 0
+        for node in nodes_to_explore:
             # Explose all edges except the one leading to exposure:
-            current_pos = matrix_index[vertex]
+            current_pos = matrix_index[node]
             neighbours = [k for i,k in enumerate(scm) if adj_matrix[current_pos,i]==1 and k!=exposure]
             neighbours += [k for i,k in enumerate(scm) if adj_matrix[i,current_pos]==1 and k!=exposure]
             for neighbour in neighbours:
@@ -53,8 +53,8 @@ def bfs(starting_nodes, explored, scm, outcome, exposure, adj_matrix, matrix_ind
                     L[counter+1] += neighbour
                     if neighbour!=outcome:
                         explored[neighbour] = True
-                    tree[counter] += [[vertex,neighbour]]
-            counter_vertex += 1
+                    tree[counter] += [[node,neighbour]]
+            counter_node += 1
         if len(tree[counter])==0:
             tree = tree[0:counter]
         counter += 1
@@ -131,10 +131,10 @@ class Dag():
             # Update backdoor paths:
             tree = self.all_paths_through_parents
             # Paths before set was evaluated:
-            potential_backdoor_paths = list(map(lambda x: {y:(self.is_collider(path=x, vertex=y) + self.irrelevant_parent_path(x)) for y in x},tree))
+            potential_backdoor_paths = list(map(lambda x: {y:(self.is_collider(path=x, node=y) + self.irrelevant_parent_path(x)) for y in x},tree))
             # Evaluates with proposed set:
             final_backdoor_paths = list(
-                map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), vertex=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths)
+                map(lambda x: {y:x[y]+(self.is_collider(path=list(x.keys()), node=y)*(-2)) + 1 if y in proposed_set else x[y] for y in x},potential_backdoor_paths)
             )
             self.final_backdoor_paths = final_backdoor_paths
             back_door_closed = list(map(lambda x: sum(list(x.values()))>=1,final_backdoor_paths))
@@ -166,14 +166,14 @@ class Dag():
         return descendants
 
     # Check if node is collider on given path:
-    def is_collider(self, path, vertex):
-        if vertex == path[0] or vertex==path[-1]:
+    def is_collider(self, path, node):
+        if node == path[0] or node==path[-1]:
             return int(False)
         else:
-            idx = path.index(vertex)
+            idx = path.index(node)
             parent = path[idx-1]
             child = path[idx+1]
-            col = self.matrix_index[vertex]
+            col = self.matrix_index[node]
             row_parent = self.matrix_index[parent]
             row_child = self.matrix_index[child]
             return int(self.adj_matrix[row_parent,col]==1 and self.adj_matrix[row_child,col]==1)
